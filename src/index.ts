@@ -43,7 +43,7 @@ async function parsePdfBuffer(buffer: Buffer): Promise<string> {
 
 async function extractDocumentData(fileBuffer: Buffer, mimeType: string): Promise<string> {
   if (mimeType === 'application/pdf' || mimeType.includes('pdf')) {
-    console.log("⚡ [STAGE A: EXTRACTION] Parsing native PDF buffer local matrix...");
+    console.log("⚡ [STAGE A: EXTRACTION] Parsing native PDF buffer matrix...");
     const text = await parsePdfBuffer(fileBuffer);
     return text || 'Empty PDF content';
   }
@@ -83,14 +83,14 @@ async function extractDocumentData(fileBuffer: Buffer, mimeType: string): Promis
 }
 
 async function auditCompliance(rawExtractedText: string): Promise<ComplianceResult> {
-  console.log("📡 [STAGE B: COMPLIANCE] Invoking agentic evaluation prompts across target business boundaries...");
+  console.log("📡 [STAGE B: COMPLIANCE] Invoking agentic evaluation across target boundaries...");
   const openRouterUrl = 'https://openrouter.ai/api/v1/chat/completions';
   
   const systemPrompt = `You are an expert compliance auditor assessing corporate data text blocks. Evaluate variables matching these thresholds:
   1. Classify document profile type explicitly as 'W9', 'InsuranceCertificate', or 'Unknown'.
   2. W9 documents must have signature references verified.
   3. Insurance Certificates must explicitly indicate a policy threshold equal or exceeding 1,000,000 USD.
-  Format the output string explicitly to a verified single JSON payload conforming strictly to this pattern:
+  Format the output string explicitly to a verified single JSON payload object conforming strictly to this pattern:
   {
     "vendorName": "Company Name",
     "documentType": "W9" | "InsuranceCertificate" | "Unknown",
@@ -112,17 +112,33 @@ async function auditCompliance(rawExtractedText: string): Promise<ComplianceResu
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Analyze the targeted context block: \n\n${rawExtractedText}` }
-      ],
-      response_format: { type: 'json_object' }
+      ]
     })
   });
 
   const data = await response.json();
-  let rawContent = data.choices[0].message.content;
-  rawContent = rawContent.replace(/```json/g, '').replace(/```/g, '').trim();
+  let rawContent = data.choices?.[0]?.message?.content;
+
+  if (!rawContent) {
+    throw new Error("The AI compliance agent failed to generate a response block.");
+  }
+
+  // Robust parsing: extract text between code fences if present, otherwise clean out code fences
+  if (rawContent.includes('```json')) {
+    rawContent = rawContent.split('```json')[1].split('```')[0];
+  } else if (rawContent.includes('```')) {
+    rawContent = rawContent.split('```')[1].split('```')[0];
+  }
+
+  rawContent = rawContent.trim();
 
   return ComplianceSchema.parse(JSON.parse(rawContent));
 }
+
+// Added a clean home route so browsers don't show "Cannot GET /"
+app.get('/', (req: Request, res: Response) => {
+  res.status(200).json({ status: "Active", agent: "ContractFlow Compliance Engine running smoothly." });
+});
 
 app.post('/api/verify-document', upload.single('document'), async (req: Request, res: Response) => {
   try {
@@ -144,7 +160,5 @@ app.post('/api/verify-document', upload.single('document'), async (req: Request,
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
-  console.log(`\n🛸 ====================================================== 🛸`);
   console.log(`📡 ContractFlow AI operational agent active on port ${PORT}`);
-  console.log(`🛸 ====================================================== 🛸\n`);
 });

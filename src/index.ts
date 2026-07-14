@@ -13,8 +13,9 @@ app.use(express.json());
 const upload = multer({ storage: multer.memoryStorage() });
 
 const ComplianceSchema = z.object({
-  vendorName: z.string(),
+  vendorName: z.string().nullable().transform(val => val ?? "Unidentified Entity"),
   documentType: z.enum(['W9', 'InsuranceCertificate', 'Unknown']),
+  // ... rest of schema
   extractedDate: z.string().nullable(),
   hasSignature: z.boolean(),
   coverageAmountUSD: z.number().nullable().optional(),
